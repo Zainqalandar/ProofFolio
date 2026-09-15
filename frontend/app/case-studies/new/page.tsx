@@ -2,8 +2,9 @@
 
 import { ChangeEvent, FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ImagePlus } from 'lucide-react';
-import api from '@/utils/axiosInstance';
+import Link from 'next/link';
+import { ArrowLeft, ImagePlus, X } from 'lucide-react';
+import { createCaseStudy } from '@/utils/prooffolio-api';
 import { getApiErrorMessage } from '@/utils/api-error';
 import { useNotification } from '@/context/notification-context';
 
@@ -25,8 +26,8 @@ export default function NewCaseStudyPage() {
       (image) => image.type.startsWith('image/') && image.size <= MAX_FILE_SIZE,
     );
 
-    if (selectedImages.length !== validImages.length) {
-      notifyError('Only images smaller than 5 MB can be added.');
+    if (selectedImages.length !== validImages.length || selectedImages.length > MAX_FILES) {
+      notifyError('Choose up to 5 PNG, JPG, or WEBP images smaller than 5 MB each.');
     }
 
     const nextImages = validImages.slice(0, MAX_FILES);
@@ -52,7 +53,7 @@ export default function NewCaseStudyPage() {
     try {
       setIsSubmitting(true);
 
-      await api.post('/case-studies', formData);
+      await createCaseStudy(formData);
       success('Your case study is live and ready for a client link.');
       router.push('/dashboard');
     } catch (error) {
@@ -65,6 +66,7 @@ export default function NewCaseStudyPage() {
   return (
     <main className="flex-1 bg-[#0a0d18] px-5 py-12 sm:px-8">
       <div className="mx-auto w-full max-w-3xl">
+      <Link href="/dashboard" className="mb-7 inline-flex items-center gap-2 text-sm font-semibold text-slate-400 hover:text-white"><ArrowLeft className="h-4 w-4" /> Back to dashboard</Link>
       <p className="text-xs font-bold uppercase tracking-[.18em] text-lime-300">New proof</p>
       <h1 className="mt-3 text-4xl font-semibold tracking-[-.06em] text-white">Tell the story behind<br />a great result.</h1>
       <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">Give your client enough context to leave feedback that feels specific and meaningful.</p>
@@ -108,14 +110,12 @@ export default function NewCaseStudyPage() {
         {previews.length > 0 && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {previews.map((preview, index) => (
-              // Preview URLs are local browser blobs; Next Image optimization does not support them.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={preview}
-                src={preview}
-                alt={`Screenshot ${index + 1}`}
-                className="h-32 w-full rounded-xl border border-white/10 object-cover"
-              />
+              <div key={preview} className="group relative">
+                {/* Preview URLs are browser blobs and should not pass through Next Image optimization. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={preview} alt={`Screenshot ${index + 1}`} className="h-32 w-full rounded-xl border border-white/10 object-cover" />
+                <button type="button" aria-label={`Remove screenshot ${index + 1}`} onClick={() => { URL.revokeObjectURL(preview); setImages((items) => items.filter((_, itemIndex) => itemIndex !== index)); setPreviews((items) => items.filter((_, itemIndex) => itemIndex !== index)); }} className="absolute right-2 top-2 rounded-lg bg-[#0a0d18]/80 p-1.5 text-white opacity-0 transition group-hover:opacity-100"><X className="h-4 w-4" /></button>
+              </div>
             ))}
           </div>
         )}

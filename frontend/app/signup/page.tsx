@@ -19,7 +19,7 @@ export default function SignUpPage() {
     if (username.trim().length < 3) return error("Your display name needs at least 3 characters.");
     if (!email.trim() || !slug) return error("Add your email and a unique profile address.");
     if (strength < 4) return error("Use 6+ characters with a letter, number, and special character.");
-    try { setLoading(true); await register({ username: username.trim(), email: email.trim(), password, profileSlug: slug }); success("Your ProofFolio is ready. Sign in to begin."); router.push("/signin"); }
+    try { setLoading(true); await register({ name: username.trim(), email: email.trim(), password, profileSlug: slug }); success("Your ProofFolio is ready. Sign in to begin."); router.push("/signin"); }
     catch (err) { error(getApiErrorMessage(err, "We could not create your account.")); } finally { setLoading(false); }
   };
   const fieldClass = "h-12 w-full rounded-xl border border-white/10 bg-[#0b1020] pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-lime-300/60 focus:ring-4 focus:ring-lime-300/10";

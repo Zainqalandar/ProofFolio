@@ -1,15 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, Quote } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, Quote } from "lucide-react";
 import { login } from "@/utils/auth-api";
 import { getApiErrorMessage } from "@/utils/api-error";
 import { setAuthToken } from "@/utils/auth";
 import { useNotification } from "@/context/notification-context";
 
 export default function SignInPage() {
+  return <Suspense fallback={<main className="grid flex-1 place-items-center bg-[#0a0d18]"><LoaderCircle className="h-7 w-7 animate-spin text-lime-300" /></main>}><SignInForm /></Suspense>;
+}
+
+function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { success, error } = useNotification();
