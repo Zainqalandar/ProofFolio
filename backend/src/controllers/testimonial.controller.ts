@@ -1,104 +1,84 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
+import { GoogleGenAI } from "@google/genai";
 import { HTTP_STATUS } from "../constants/http-status";
-import testimonialModel from "../models/testimonial.model";
+import Testimonial from "../models/testimonial.model";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 
-const createTestimonial = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
+const getPendingTestimonials = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const {
-      caseStudyId,
-      freelancerId,
-      clientName,
-      clientEmail,
-      clientCompany,
-      message,
-      aiHighlight,
-      status,
-      submittedAt,
-      reviewedAt,
-    } = req.body;
-
-    if (!caseStudyId || !freelancerId || !clientName || !clientEmail || !clientCompany || !message) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        message: "Missing required fields",
-      });
-      return;
-    }
-
-
-    const newTestimonial = new testimonialModel({
-        caseStudyId,
-        freelancerId,
-        clientName,
-        clientEmail,
-        clientCompany,
-        message,
-        aiHighlight: aiHighlight || "",
-        status: status || "pending",
-        submittedAt: submittedAt || new Date(),
-        reviewedAt: reviewedAt || null,
-    });
-
-    const saveTestimonial = await newTestimonial.save();
-    res.status(HTTP_STATUS.CREATED).json(saveTestimonial);
+    const testimonials = await Testimonial.find({ freelancer: req.user!.id, status: "pending" })
+      .populate("caseStudy", "title")
+      .sort({ submittedAt: -1 });
+    res.status(HTTP_STATUS.OK).json({ testimonials });
   } catch (error) {
-    res
-      .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
-      .json({ message: "Error creating case study", error });
+    console.error("Error fetching pending testimonials:", error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ message: "Error fetching pending testimonials" });
   }
 };
 
-const updateTestimonial = async (req: Request, res: Response): Promise<void> => {
+const reviewTestimonial = async (req: AuthenticatedRequest, res: Response, status: "approved" | "rejected"): Promise<void> => {
   try {
-    const { id } = req.params;
-    const updateData = req.body;
-
-    if (!id) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: "Testimonial ID is required" });
+    const id = typeof req.params.id === "string" ? req.params.id : undefined;
+    if (typeof id !== "string" || !mongoose.isValidObjectId(id)) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: "A valid testimonial ID is required" });
       return;
     }
-
-    const updatedTestimonial = await testimonialModel.findByIdAndUpdate(id, updateData, { new: true });
-
-    if (!updatedTestimonial) {
+    const testimonial = await Testimonial.findOne({ _id: id, freelancer: req.user!.id });
+    if (!testimonial) {
       res.status(HTTP_STATUS.NOT_FOUND).json({ message: "Testimonial not found" });
       return;
     }
-
-    res.status(HTTP_STATUS.OK).json(updatedTestimonial);
+    if (testimonial.status !== "pending") {
+      res.status(HTTP_STATUS.CONFLICT).json({ message: "Only pending testimonials can be reviewed" });
+      return;
+    }
+    testimonial.status = status;
+    testimonial.reviewedAt = new Date();
+    await testimonial.save();
+    res.status(HTTP_STATUS.OK).json({ testimonial });
   } catch (error) {
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ message: "Error updating testimonial", error });
+    console.error("Error reviewing testimonial:", error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ message: "Error reviewing testimonial" });
   }
 };
 
-const getTestimonialById = async (req: Request, res: Response): Promise<void> => {
+const approveTestimonial = (req: AuthenticatedRequest, res: Response): Promise<void> => reviewTestimonial(req, res, "approved");
+const rejectTestimonial = (req: AuthenticatedRequest, res: Response): Promise<void> => reviewTestimonial(req, res, "rejected");
+
+const generateAiHighlight = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
-
-    if (!id) {
-      res
-        .status(HTTP_STATUS.BAD_REQUEST)
-        .json({ message: "Testimonial ID is required" });
+    const id = typeof req.params.id === "string" ? req.params.id : undefined;
+    if (typeof id !== "string" || !mongoose.isValidObjectId(id)) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: "A valid testimonial ID is required" });
       return;
     }
-
-    const testimonial = await testimonialModel.findById(id);
-
+    const testimonial = await Testimonial.findOne({ _id: id, freelancer: req.user!.id });
     if (!testimonial) {
-      res
-        .status(HTTP_STATUS.NOT_FOUND)
-        .json({ message: "Testimonial not found" });
+      res.status(HTTP_STATUS.NOT_FOUND).json({ message: "Testimonial not found" });
       return;
     }
-
-    res.status(HTTP_STATUS.OK).json(testimonial);
+    if (!process.env.GEMINI_API_KEY) {
+      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({ message: "AI highlight service is not configured" });
+      return;
+    }
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const response = await ai.models.generateContent({
+      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      contents: `Write one punchy highlight sentence (maximum 20 words) from this client testimonial. Return only the sentence.\n\n${testimonial.message}`,
+    });
+    const aiHighlight = response.text?.trim();
+    if (!aiHighlight) {
+      res.status(HTTP_STATUS.BAD_GATEWAY).json({ message: "AI highlight service returned no text" });
+      return;
+    }
+    testimonial.aiHighlight = aiHighlight.slice(0, 500);
+    await testimonial.save();
+    res.status(HTTP_STATUS.OK).json({ testimonial });
   } catch (error) {
-    res
-      .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
-      .json({ message: "Error fetching testimonial", error });
+    console.error("Error generating AI highlight:", error);
+    res.status(HTTP_STATUS.BAD_GATEWAY).json({ message: "Unable to generate AI highlight" });
   }
 };
 
-export { createTestimonial, getTestimonialById, updateTestimonial };
+export { getPendingTestimonials, approveTestimonial, rejectTestimonial, generateAiHighlight };

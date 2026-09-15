@@ -1,29 +1,24 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Document, Schema } from "mongoose";
 
 export interface ICaseStudy extends Document {
-  freelancerId: mongoose.Types.ObjectId;
+  freelancer: mongoose.Types.ObjectId;
   title: string;
   description: string;
   screenshots: string[];
   shareToken: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-const CaseStudySchema: Schema<ICaseStudy> = new Schema({
-  freelancerId: {
-    type: mongoose.Types.ObjectId,
-    ref: 'User',
-    required: true,
-    index: true,
+const CaseStudySchema = new Schema<ICaseStudy>(
+  {
+    freelancer: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    title: { type: String, required: true, trim: true, maxlength: 160 },
+    description: { type: String, required: true, trim: true, maxlength: 10_000 },
+    screenshots: { type: [String], default: [] },
+    shareToken: { type: String, required: true, unique: true, index: true },
   },
-  title: { type: String, required: true, trim: true },
-  description: { type: String, required: true, trim: true },
-  screenshots: {
-    type: [String],
-    default: [],
-  },
-  shareToken: { type: String, required: true, unique: true, index: true },
-}, {
-  timestamps: true,
-});
+  { timestamps: true },
+);
 
-export default mongoose.model<ICaseStudy>('CaseStudy', CaseStudySchema);
+export default mongoose.model<ICaseStudy>("CaseStudy", CaseStudySchema);

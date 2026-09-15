@@ -1,231 +1,123 @@
-import { Request, Response } from "express";
 import crypto from "node:crypto";
+import mongoose from "mongoose";
+import { Response } from "express";
 import { HTTP_STATUS } from "../constants/http-status";
 import CaseStudy from "../models/case-study.model";
+import Testimonial from "../models/testimonial.model";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 
-const createCaseStudy = async (
-  req: AuthenticatedRequest,
-  res: Response,
-): Promise<void> => {
+const uploadedUrls = (files: Express.Multer.File[] | undefined): string[] =>
+  (files ?? []).map((file) => file.path).filter((url): url is string => Boolean(url));
+
+const createCaseStudy = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { title, description } = req.body as {
-      title?: string;
-      description?: string;
-    };
-    const files = (req.files ?? []) as Express.Multer.File[];
-
+    const { title, description } = (req.body && typeof req.body === "object" ? req.body : {}) as { title?: unknown; description?: unknown };
+    const screenshots = uploadedUrls(req.files as Express.Multer.File[] | undefined);
     if (!req.user?.id) {
-      res
-        .status(HTTP_STATUS.UNAUTHORIZED)
-        .json({ message: "Please login first" });
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ message: "Please login first" });
       return;
     }
-
-    if (!title?.trim() || !description?.trim()) {
-      res
-        .status(HTTP_STATUS.BAD_REQUEST)
-        .json({ message: "Title and description are required" });
+    if (typeof title !== "string" || !title.trim() || typeof description !== "string" || !description.trim()) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: "Title and description are required" });
       return;
     }
-
-    if (files.length === 0) {
-      res
-        .status(HTTP_STATUS.BAD_REQUEST)
-        .json({ message: "At least one screenshot is required" });
+    if (screenshots.length === 0) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: "At least one screenshot is required" });
       return;
     }
-
-    // CloudinaryStorage file.path me uploaded image ka URL deta hai.
-    const screenshotUrls = files.map((file) => file.path).filter(Boolean);
-
-    const newCaseStudy = new CaseStudy({
-      freelancerId: req.user.id,
-      title: title.trim(),
-      description: description.trim(),
-      screenshots: screenshotUrls,
-      shareToken: crypto.randomBytes(16).toString("hex"),
-    });
-
-    const savedCaseStudy = await newCaseStudy.save();
-    res.status(HTTP_STATUS.CREATED).json(savedCaseStudy);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const caseStudy = await CaseStudy.create({
+          freelancer: req.user.id,
+          title: title.trim(),
+          description: description.trim(),
+          screenshots,
+          shareToken: crypto.randomBytes(16).toString("hex"),
+        });
+        res.status(HTTP_STATUS.CREATED).json({ caseStudy });
+        return;
+      } catch (error) {
+        if ((error as { code?: number }).code !== 11000 || attempt === 2) throw error;
+      }
+    }
   } catch (error) {
-    res
-      .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
-      .json({ message: "Error creating case study", error });
+    console.error("Error creating case study:", error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ message: "Error creating case study" });
   }
 };
 
-const getCaseStudyByShareToken = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
+const getMyCaseStudies = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { shareToken } = req.params;
-
-    if (!shareToken) {
-      res
-        .status(HTTP_STATUS.BAD_REQUEST)
-        .json({ message: "Share token is required" });
+    if (!req.user?.id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ message: "Please login first" });
       return;
     }
+    const caseStudies = await CaseStudy.find({ freelancer: req.user.id }).sort({ createdAt: -1 });
+    res.status(HTTP_STATUS.OK).json({ caseStudies });
+  } catch (error) {
+    console.error("Error fetching case studies:", error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ message: "Error fetching case studies" });
+  }
+};
 
-    const caseStudy = await CaseStudy.findOne({ shareToken });
-
+const updateCaseStudy = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = typeof req.params.id === "string" ? req.params.id : undefined;
+    const { title, description } = (req.body && typeof req.body === "object" ? req.body : {}) as { title?: unknown; description?: unknown };
+    if (!req.user?.id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ message: "Please login first" });
+      return;
+    }
+    if (typeof id !== "string" || !mongoose.isValidObjectId(id)) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: "A valid case study ID is required" });
+      return;
+    }
+    if (
+      (title !== undefined && (typeof title !== "string" || !title.trim())) ||
+      (description !== undefined && (typeof description !== "string" || !description.trim()))
+    ) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: "Title and description cannot be empty" });
+      return;
+    }
+    const caseStudy = await CaseStudy.findOne({ _id: id, freelancer: req.user.id });
     if (!caseStudy) {
-      res
-        .status(HTTP_STATUS.NOT_FOUND)
-        .json({ message: "Case study not found" });
+      res.status(HTTP_STATUS.NOT_FOUND).json({ message: "Case study not found" });
       return;
     }
-
-    res.status(HTTP_STATUS.OK).json(caseStudy);
+    if (title !== undefined) caseStudy.title = title.trim();
+    if (description !== undefined) caseStudy.description = description.trim();
+    const screenshots = uploadedUrls(req.files as Express.Multer.File[] | undefined);
+    if (screenshots.length > 0) caseStudy.screenshots = screenshots;
+    await caseStudy.save();
+    res.status(HTTP_STATUS.OK).json({ caseStudy });
   } catch (error) {
-    res
-      .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
-      .json({ message: "Error fetching case study", error });
+    console.error("Error updating case study:", error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ message: "Error updating case study" });
   }
 };
 
-const deleteCaseStudy = async (
-  req: AuthenticatedRequest,
-  res: Response,
-): Promise<void> => {
+const deleteCaseStudy = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
-
+    const id = typeof req.params.id === "string" ? req.params.id : undefined;
     if (!req.user?.id) {
-      res
-        .status(HTTP_STATUS.UNAUTHORIZED)
-        .json({ message: "Please login first" });
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ message: "Please login first" });
       return;
     }
-
-    if (!id) {
-      res
-        .status(HTTP_STATUS.BAD_REQUEST)
-        .json({ message: "Case study ID is required" });
+    if (typeof id !== "string" || !mongoose.isValidObjectId(id)) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: "A valid case study ID is required" });
       return;
     }
-
-    const caseStudy = await CaseStudy.findById(id);
-
+    const caseStudy = await CaseStudy.findOneAndDelete({ _id: id, freelancer: req.user.id });
     if (!caseStudy) {
-      res
-        .status(HTTP_STATUS.NOT_FOUND)
-        .json({ message: "Case study not found" });
+      res.status(HTTP_STATUS.NOT_FOUND).json({ message: "Case study not found" });
       return;
     }
-
-    if (caseStudy.freelancerId.toString() !== req.user.id) {
-      res
-        .status(HTTP_STATUS.FORBIDDEN)
-        .json({ message: "You are not authorized to delete this case study" });
-      return;
-    }
-
-    await CaseStudy.findByIdAndDelete(id);
-    res
-      .status(HTTP_STATUS.OK)
-      .json({ message: "Case study deleted successfully" });
+    await Testimonial.deleteMany({ caseStudy: caseStudy._id });
+    res.status(HTTP_STATUS.OK).json({ message: "Case study deleted successfully" });
   } catch (error) {
-    res
-      .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
-      .json({ message: "Error deleting case study", error });
+    console.error("Error deleting case study:", error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ message: "Error deleting case study" });
   }
 };
 
-const updateCaseStudy = async (
-  req: AuthenticatedRequest,
-  res: Response,
-): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const { title, description } = req.body as {
-      title?: string;
-      description?: string;
-    };
-    const files = (req.files ?? []) as Express.Multer.File[];
-
-    if (!req.user?.id) {
-      res
-        .status(HTTP_STATUS.UNAUTHORIZED)
-        .json({ message: "Please login first" });
-      return;
-    }
-
-    if (!id) {
-      res
-        .status(HTTP_STATUS.BAD_REQUEST)
-        .json({ message: "Case study ID is required" });
-      return;
-    }
-
-    const caseStudy = await CaseStudy.findById(id);
-
-    if (!caseStudy) {
-      res
-        .status(HTTP_STATUS.NOT_FOUND)
-        .json({ message: "Case study not found" });
-      return;
-    }
-
-    if (caseStudy.freelancerId.toString() !== req.user.id) {
-      res
-        .status(HTTP_STATUS.FORBIDDEN)
-        .json({ message: "You are not authorized to update this case study" });
-      return;
-    }
-
-    if (title?.trim()) {
-      caseStudy.title = title.trim();
-    }
-
-    if (description?.trim()) {
-      caseStudy.description = description.trim();
-    }
-
-    if (files.length > 0) {
-      const screenshotUrls = files.map((file) => file.path).filter(Boolean);
-      caseStudy.screenshots = screenshotUrls;
-    }
-
-    const updatedCaseStudy = await caseStudy.save();
-    res.status(HTTP_STATUS.OK).json(updatedCaseStudy);
-  } catch (error) {
-    res
-      .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
-      .json({ message: "Error updating case study", error });
-  }
-};
-
-const getMyCaseStudies = async (
-  req: AuthenticatedRequest,
-  res: Response,
-): Promise<void> => {
-  try {
-    if (!req.user?.id) {
-      res
-        .status(HTTP_STATUS.UNAUTHORIZED)
-        .json({ message: "Please login first" });
-      return;
-    }
-
-    const caseStudies = await CaseStudy.find({
-      freelancerId: req.user.id,
-    }).sort({ createdAt: -1 });
-    res.status(HTTP_STATUS.OK).json(caseStudies);
-  } catch (error) {
-    res
-      .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
-      .json({ message: "Error fetching case studies", error });
-  }
-};
-
-export {
-  createCaseStudy,
-  getMyCaseStudies,
-  updateCaseStudy,
-  deleteCaseStudy,
-  getCaseStudyByShareToken,
-};
+export { createCaseStudy, getMyCaseStudies, updateCaseStudy, deleteCaseStudy };

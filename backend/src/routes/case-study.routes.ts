@@ -1,34 +1,14 @@
 import { Router } from "express";
 import protect from "../middleware/auth.middleware";
 import uploadCaseStudyImages from "../middleware/upload.middleware";
-import {
-  createCaseStudy,
-  getMyCaseStudies,
-  updateCaseStudy,
-  deleteCaseStudy,
-  getCaseStudyByShareToken,
-} from "../controllers/case-study.controller";
+import { createCaseStudy, deleteCaseStudy, getMyCaseStudies, updateCaseStudy } from "../controllers/case-study.controller";
 
 const router = Router();
 
-router.post(
-  "/",
-  protect,
-  uploadCaseStudyImages.array("screenshots", 5),
-  createCaseStudy,
-);
-
-router.get("/share/:shareToken", getCaseStudyByShareToken);
-
-router.put(
-  "/:id",
-  protect,
-  uploadCaseStudyImages.array("screenshots", 5),
-  updateCaseStudy,
-);
-
-router.delete("/:id", protect, deleteCaseStudy);
-
+router.post("/", protect, uploadCaseStudyImages.array("screenshots", 5), createCaseStudy);
+// This must precede /:id so Express does not treat "my" as an ID.
 router.get("/my", protect, getMyCaseStudies);
+router.put("/:id", protect, uploadCaseStudyImages.array("screenshots", 5), updateCaseStudy);
+router.delete("/:id", protect, deleteCaseStudy);
 
 export default router;
