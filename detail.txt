@@ -1,0 +1,4 @@
+
+
+// npm install cloudinary multer multer-storage-cloudinary
+// Cloudinary and Multer packages for handling file uploads
