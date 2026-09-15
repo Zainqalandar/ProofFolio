@@ -5,9 +5,20 @@ import { HTTP_STATUS } from "../constants/http-status";
 import Testimonial from "../models/testimonial.model";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 
+const getFreelancerId = (req: AuthenticatedRequest, res: Response): string | null => {
+  const freelancerId = req.user?.id;
+  if (typeof freelancerId !== "string" || !mongoose.isValidObjectId(freelancerId)) {
+    res.status(HTTP_STATUS.UNAUTHORIZED).json({ message: "Unauthorized" });
+    return null;
+  }
+  return freelancerId;
+};
+
 const getPendingTestimonials = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const testimonials = await Testimonial.find({ freelancer: req.user!.id, status: "pending" })
+    const freelancerId = getFreelancerId(req, res);
+    if (!freelancerId) return;
+    const testimonials = await Testimonial.find({ freelancer: freelancerId, status: "pending" })
       .populate("caseStudy", "title")
       .sort({ submittedAt: -1 });
     res.status(HTTP_STATUS.OK).json({ testimonials });
@@ -19,12 +30,14 @@ const getPendingTestimonials = async (req: AuthenticatedRequest, res: Response):
 
 const reviewTestimonial = async (req: AuthenticatedRequest, res: Response, status: "approved" | "rejected"): Promise<void> => {
   try {
+    const freelancerId = getFreelancerId(req, res);
+    if (!freelancerId) return;
     const id = typeof req.params.id === "string" ? req.params.id : undefined;
     if (typeof id !== "string" || !mongoose.isValidObjectId(id)) {
       res.status(HTTP_STATUS.BAD_REQUEST).json({ message: "A valid testimonial ID is required" });
       return;
     }
-    const testimonial = await Testimonial.findOne({ _id: id, freelancer: req.user!.id });
+    const testimonial = await Testimonial.findOne({ _id: id, freelancer: freelancerId });
     if (!testimonial) {
       res.status(HTTP_STATUS.NOT_FOUND).json({ message: "Testimonial not found" });
       return;
@@ -48,12 +61,14 @@ const rejectTestimonial = (req: AuthenticatedRequest, res: Response): Promise<vo
 
 const generateAiHighlight = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const freelancerId = getFreelancerId(req, res);
+    if (!freelancerId) return;
     const id = typeof req.params.id === "string" ? req.params.id : undefined;
     if (typeof id !== "string" || !mongoose.isValidObjectId(id)) {
       res.status(HTTP_STATUS.BAD_REQUEST).json({ message: "A valid testimonial ID is required" });
       return;
     }
-    const testimonial = await Testimonial.findOne({ _id: id, freelancer: req.user!.id });
+    const testimonial = await Testimonial.findOne({ _id: id, freelancer: freelancerId });
     if (!testimonial) {
       res.status(HTTP_STATUS.NOT_FOUND).json({ message: "Testimonial not found" });
       return;

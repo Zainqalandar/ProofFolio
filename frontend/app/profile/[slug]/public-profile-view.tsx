@@ -32,6 +32,7 @@ export default function PublicProfileView({ slug }: { slug: string }) {
           sort,
           ...(selectedCaseStudy ? { caseStudy: selectedCaseStudy } : {}),
         });
+        console.log("Public profile data:", response.data);
         setData(response.data);
       } catch (requestError) {
         setLoadError(getApiErrorMessage(requestError, "This profile could not be loaded."));

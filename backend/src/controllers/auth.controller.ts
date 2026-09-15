@@ -7,6 +7,8 @@ import { AuthenticatedRequest } from "../middleware/auth.middleware";
 
 const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{6,}$/;
 const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const getJwtSecret = (): string | undefined =>
+  process.env.JWT_SECRET || (process.env.NODE_ENV !== "production" ? "068406" : undefined);
 
 const publicUser = (user: { _id: unknown; name: string; email: string; bio: string; profileSlug: string }) => ({
   _id: user._id,
@@ -75,7 +77,7 @@ const loginUser = async (req: Request, res: Response): Promise<void> => {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({ message: "Invalid email or password" });
       return;
     }
-    const secret = process.env.JWT_SECRET;
+    const secret = getJwtSecret();
     if (!secret) {
       console.error("JWT_SECRET is not configured");
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ message: "Server authentication is not configured" });
