@@ -8,8 +8,24 @@ import testimonialRoutes from "./routes/testimonial.routes";
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = (process.env.FRONTEND_URL || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error("CORS origin is not allowed"));
+  },
+}));
 app.use(express.json());
+app.get("/health", (_req, res) => {
+  res.status(200).json({ success: true, message: "ProofFolio API is healthy" });
+});
 app.use("/api/auth", authRoutes);
 app.use("/api/case-studies", caseStudyRoutes);
 app.use("/api/testimonials", testimonialRoutes);
