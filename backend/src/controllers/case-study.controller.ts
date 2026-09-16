@@ -1,10 +1,11 @@
 import crypto from "node:crypto";
 import mongoose from "mongoose";
-import { Response } from "express";
+import { Request, Response } from "express";
 import { HTTP_STATUS } from "../constants/http-status";
 import CaseStudy from "../models/case-study.model";
 import Testimonial from "../models/testimonial.model";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
+import { enhanceDesc } from "../services/gemini.service";
 
 const uploadedUrls = (files: Express.Multer.File[] | undefined): string[] =>
   (files ?? []).map((file) => file.path).filter((url): url is string => Boolean(url));
@@ -121,4 +122,24 @@ const deleteCaseStudy = async (req: AuthenticatedRequest, res: Response): Promis
   }
 };
 
-export { createCaseStudy, getMyCaseStudies, updateCaseStudy, deleteCaseStudy };
+const enhanceStoryDescription = async (req: Request, res: Response) => {
+  try {
+    const { description } = req.body;
+    if (typeof description !== "string" || !description.trim()) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ message: "Description is required" });
+    }
+
+    const enhancedDescription = await enhanceDesc(description.trim());
+    return res.status(HTTP_STATUS.OK).json({
+      message: "Description enhanced successfully",
+      data: { enhancedDescription },
+    });
+  } catch (error) {
+    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      message: "Error enhancing description",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
+export { createCaseStudy, getMyCaseStudies, updateCaseStudy, deleteCaseStudy, enhanceStoryDescription };

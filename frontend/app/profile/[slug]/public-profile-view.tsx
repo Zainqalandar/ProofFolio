@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { type ChangeEvent, useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarDays, LoaderCircle, MessageSquareQuote, Pencil, Sparkles } from "lucide-react";
+import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
+import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarDays, LoaderCircle, MessageSquareQuote, Pencil, Sparkles, X } from "lucide-react";
 import { getCurrentUser } from "@/utils/auth-api";
 import { hasAuthToken } from "@/utils/auth";
-import { getPublicProfile, updateProfilePicture } from "@/utils/prooffolio-api";
+import { getPublicProfile, updateProfilePicture, updatePublicProfile } from "@/utils/prooffolio-api";
 import { getApiErrorMessage } from "@/utils/api-error";
 import { useNotification } from "@/context/notification-context";
 import type { AuthUser, PublicProfileResponse, Testimonial } from "@/types/api";
@@ -27,6 +27,10 @@ export default function PublicProfileView({ slug }: { slug: string }) {
   const [loadError, setLoadError] = useState("");
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [uploadingPicture, setUploadingPicture] = useState(false);
+  const [isProfileEditorOpen, setIsProfileEditorOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const { success, error } = useNotification();
 
   useEffect(() => {
@@ -52,10 +56,7 @@ export default function PublicProfileView({ slug }: { slug: string }) {
   }, [page, selectedCaseStudy, slug, sort]);
 
   useEffect(() => {
-    if (!hasAuthToken()) {
-      setCurrentUser(null);
-      return;
-    }
+    if (!hasAuthToken()) return;
 
     let cancelled = false;
     void getCurrentUser()
@@ -98,6 +99,36 @@ export default function PublicProfileView({ slug }: { slug: string }) {
     }
   };
 
+  const openProfileEditor = () => {
+    if (!data) return;
+    setEditName(data.profile.name);
+    setEditBio(data.profile.bio);
+    setIsProfileEditorOpen(true);
+  };
+
+  const handleProfileUpdate = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (editName.trim().length < 3) {
+      error("Name must be at least 3 characters.");
+      return;
+    }
+
+    try {
+      setIsSavingProfile(true);
+      const response = await updatePublicProfile(slug, { name: editName.trim(), bio: editBio.trim() });
+      setData((previous) => previous ? {
+        ...previous,
+        profile: { ...previous.profile, ...response.data.profile },
+      } : previous);
+      setIsProfileEditorOpen(false);
+      success("Profile updated.");
+    } catch (requestError) {
+      error(getApiErrorMessage(requestError, "The profile could not be updated."));
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
   if (loading && !data) return <main className="grid flex-1 place-items-center bg-[#0a0d18]"><LoaderCircle className="h-7 w-7 animate-spin text-lime-300" /></main>;
   if (loadError && !data) return <main className="grid flex-1 place-items-center bg-[#0a0d18] px-5"><div className="max-w-md text-center"><MessageSquareQuote className="mx-auto h-9 w-9 text-rose-300" /><h1 className="mt-5 text-3xl font-semibold tracking-[-.05em] text-white">Profile unavailable</h1><p className="mt-3 text-sm leading-6 text-slate-400">{loadError}</p><Link href="/" className="mt-6 inline-flex font-bold text-lime-300">Back to ProofFolio</Link></div></main>;
   if (!data) return null;
@@ -127,6 +158,7 @@ export default function PublicProfileView({ slug }: { slug: string }) {
                   </label>}
                 </div>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-lime-300/20 bg-lime-300/8 px-3 py-1.5 text-xs font-bold text-lime-200"><BadgeCheck className="h-3.5 w-3.5" /> ProofFolio profile</span>
+                {canEditProfile && <button type="button" onClick={openProfileEditor} aria-label="Edit profile" title="Edit profile" className="grid h-8 w-8 place-items-center rounded-xl border border-white/10 text-slate-400 transition hover:border-lime-300/40 hover:bg-lime-300/10 hover:text-lime-200"><Pencil className="h-3.5 w-3.5" /></button>}
               </div>
               <h1 className="mt-7 text-5xl font-semibold tracking-[-.065em] text-white sm:text-7xl">{data.profile.name}</h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-slate-400">{data.profile.bio || "Independent professional sharing real work and verified client experiences."}</p>
@@ -135,6 +167,15 @@ export default function PublicProfileView({ slug }: { slug: string }) {
           </div>
         </div>
       </section>
+
+      {isProfileEditorOpen && <div className="fixed inset-0 z-[60] grid place-items-center bg-[#050711]/75 px-5 py-8 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="edit-profile-title">
+        <form onSubmit={handleProfileUpdate} className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#111728] p-6 shadow-2xl shadow-black/50 sm:p-7">
+          <div className="flex items-start justify-between gap-5"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-lime-300">Your public profile</p><h2 id="edit-profile-title" className="mt-2 text-2xl font-semibold tracking-[-.05em] text-white">Edit profile</h2></div><button type="button" onClick={() => setIsProfileEditorOpen(false)} disabled={isSavingProfile} aria-label="Close profile editor" className="grid h-9 w-9 place-items-center rounded-xl text-slate-400 transition hover:bg-white/5 hover:text-white disabled:opacity-40"><X className="h-5 w-5" /></button></div>
+          <label className="mt-7 block text-sm font-semibold text-slate-200"><span className="mb-2 block">Name</span><input value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={80} required disabled={isSavingProfile} className="h-12 w-full rounded-xl border border-white/10 bg-[#0b1020] px-4 text-sm font-normal text-white outline-none placeholder:text-slate-600 focus:border-lime-300/60 focus:ring-4 focus:ring-lime-300/10 disabled:opacity-60" /></label>
+          <label className="mt-5 block text-sm font-semibold text-slate-200"><span className="mb-2 flex items-center justify-between gap-3"><span>Bio</span><span className="text-xs font-normal text-slate-500">{editBio.length}/1000</span></span><textarea value={editBio} onChange={(event) => setEditBio(event.target.value)} maxLength={1000} rows={5} disabled={isSavingProfile} className="w-full resize-y rounded-xl border border-white/10 bg-[#0b1020] px-4 py-3 text-sm font-normal leading-6 text-white outline-none placeholder:text-slate-600 focus:border-lime-300/60 focus:ring-4 focus:ring-lime-300/10 disabled:opacity-60" placeholder="Tell visitors a little about your work." /></label>
+          <div className="mt-7 flex justify-end gap-3"><button type="button" onClick={() => setIsProfileEditorOpen(false)} disabled={isSavingProfile} className="h-11 rounded-xl px-4 text-sm font-semibold text-slate-300 transition hover:bg-white/5 hover:text-white disabled:opacity-40">Cancel</button><button type="submit" disabled={isSavingProfile || editName.trim().length < 3} className="inline-flex h-11 items-center gap-2 rounded-xl bg-lime-300 px-4 text-sm font-bold text-[#101424] transition hover:bg-lime-200 disabled:cursor-not-allowed disabled:opacity-45">{isSavingProfile && <LoaderCircle className="h-4 w-4 animate-spin" />}{isSavingProfile ? "Saving…" : "Save changes"}</button></div>
+        </form>
+      </div>}
 
       <section className="mx-auto max-w-6xl px-5 py-14 sm:px-8">
         <div className="flex items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-fuchsia-300">Selected work</p><h2 className="mt-2 text-3xl font-semibold tracking-[-.05em] text-white">Case studies</h2></div></div>

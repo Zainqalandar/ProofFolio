@@ -39,3 +39,13 @@ export type PublicProfileResponse = {
   testimonials: Testimonial[];
   pagination: { page: number; limit: number; total: number; totalPages: number };
 };
+
+export type PublicProfileSummary = Pick<AuthUser, "name" | "bio" | "profileSlug" | "profilePicture"> & {
+  projectCount: number;
+  projects: Pick<CaseStudy, "_id" | "title" | "description" | "screenshots" | "createdAt">[];
+};
+
+export type PublicProfilesResponse = {
+  profiles: PublicProfileSummary[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};

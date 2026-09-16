@@ -3,8 +3,8 @@
 import { ChangeEvent, FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ImagePlus, X } from 'lucide-react';
-import { createCaseStudy } from '@/utils/prooffolio-api';
+import { ArrowLeft, ImagePlus, LoaderCircle, Sparkles, X } from 'lucide-react';
+import { createCaseStudy, enhanceDescription } from '@/utils/prooffolio-api';
 import { getApiErrorMessage } from '@/utils/api-error';
 import { useNotification } from '@/context/notification-context';
 
@@ -19,6 +19,7 @@ export default function NewCaseStudyPage() {
   const [images, setImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
 
   const handleImagesChange = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedImages = Array.from(event.target.files || []);
@@ -35,6 +36,24 @@ export default function NewCaseStudyPage() {
     previews.forEach((url) => URL.revokeObjectURL(url));
     setImages(nextImages);
     setPreviews(nextImages.map((image) => URL.createObjectURL(image)));
+  };
+
+  const handleEnhanceDescription = async () => {
+    if (!description.trim()) {
+      notifyError('Write a project story first so AI can improve it.');
+      return;
+    }
+
+    try {
+      setIsEnhancing(true);
+      const response = await enhanceDescription(description.trim());
+      setDescription(response.data.data.enhancedDescription);
+      success('Project story enhanced with AI.');
+    } catch (error) {
+      notifyError(getApiErrorMessage(error, 'The project story could not be enhanced.'));
+    } finally {
+      setIsEnhancing(false);
+    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -83,15 +102,29 @@ export default function NewCaseStudyPage() {
           />
         </label>
 
-        <label className="block text-sm font-semibold text-slate-200">
-          <span className="mb-2 block">Project story</span>
+        <div className="block text-sm font-semibold text-slate-200">
+          <span className="mb-2 flex items-center justify-between gap-3">
+            <label htmlFor="project-story">Project story</label>
+            <button
+              type="button"
+              onClick={() => void handleEnhanceDescription()}
+              disabled={isEnhancing || isSubmitting || !description.trim()}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-fuchsia-300/25 bg-fuchsia-300/10 px-2.5 text-xs font-bold text-fuchsia-200 transition hover:border-fuchsia-300/45 hover:bg-fuchsia-300/15 disabled:cursor-not-allowed disabled:opacity-45"
+              title={description.trim() ? 'Improve project story with AI' : 'Write a project story first'}
+            >
+              {isEnhancing ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {isEnhancing ? 'Enhancing…' : 'Enhance with AI'}
+            </button>
+          </span>
           <textarea
+            id="project-story"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
+            disabled={isEnhancing}
             className="min-h-40 w-full rounded-xl border border-white/10 bg-[#0b1020] px-4 py-3 text-sm font-normal text-white outline-none placeholder:text-slate-600 focus:border-lime-300/60 focus:ring-4 focus:ring-lime-300/10"
             placeholder="What did you make, what challenge did it solve, and what changed?"
           />
-        </label>
+        </div>
 
         <label className="block text-sm font-semibold text-slate-200">
           <span className="mb-2 block">Screenshots</span>
