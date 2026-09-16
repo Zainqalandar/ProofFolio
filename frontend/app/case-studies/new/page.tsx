@@ -22,6 +22,7 @@ export default function NewCaseStudyPage() {
 
   const handleImagesChange = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedImages = Array.from(event.target.files || []);
+    console.log('Selected files:', selectedImages);
     const validImages = selectedImages.filter(
       (image) => image.type.startsWith('image/') && image.size <= MAX_FILE_SIZE,
     );

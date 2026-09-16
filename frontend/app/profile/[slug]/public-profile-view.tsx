@@ -1,11 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarDays, LoaderCircle, MessageSquareQuote, Sparkles } from "lucide-react";
-import { getPublicProfile } from "@/utils/prooffolio-api";
+import { type ChangeEvent, useEffect, useState } from "react";
+import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarDays, LoaderCircle, MessageSquareQuote, Pencil, Sparkles } from "lucide-react";
+import { getCurrentUser } from "@/utils/auth-api";
+import { hasAuthToken } from "@/utils/auth";
+import { getPublicProfile, updateProfilePicture } from "@/utils/prooffolio-api";
 import { getApiErrorMessage } from "@/utils/api-error";
-import type { PublicProfileResponse, Testimonial } from "@/types/api";
+import { useNotification } from "@/context/notification-context";
+import type { AuthUser, PublicProfileResponse, Testimonial } from "@/types/api";
+
+const MAX_PROFILE_PICTURE_SIZE = 5 * 1024 * 1024;
 
 const caseStudyTitle = (testimonial: Testimonial) =>
   typeof testimonial.caseStudy === "string" ? "Client result" : testimonial.caseStudy.title;
@@ -20,6 +25,9 @@ export default function PublicProfileView({ slug }: { slug: string }) {
   const [selectedCaseStudy, setSelectedCaseStudy] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [uploadingPicture, setUploadingPicture] = useState(false);
+  const { success, error } = useNotification();
 
   useEffect(() => {
     const load = async () => {
@@ -43,9 +51,58 @@ export default function PublicProfileView({ slug }: { slug: string }) {
     void load();
   }, [page, selectedCaseStudy, slug, sort]);
 
+  useEffect(() => {
+    if (!hasAuthToken()) {
+      setCurrentUser(null);
+      return;
+    }
+
+    let cancelled = false;
+    void getCurrentUser()
+      .then((response) => {
+        if (!cancelled) setCurrentUser(response.data.user);
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentUser(null);
+      });
+
+    return () => { cancelled = true; };
+  }, [slug]);
+
+  const handleProfilePictureChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      error("Please choose an image file.");
+      return;
+    }
+    if (file.size > MAX_PROFILE_PICTURE_SIZE) {
+      error("Profile pictures must be 5 MB or smaller.");
+      return;
+    }
+
+    try {
+      setUploadingPicture(true);
+      const response = await updateProfilePicture(file);
+      setCurrentUser(response.data.user);
+      setData((previous) => previous ? {
+        ...previous,
+        profile: { ...previous.profile, profilePicture: response.data.user.profilePicture },
+      } : previous);
+      success("Profile picture updated.");
+    } catch (requestError) {
+      error(getApiErrorMessage(requestError, "The profile picture could not be updated."));
+    } finally {
+      setUploadingPicture(false);
+    }
+  };
+
   if (loading && !data) return <main className="grid flex-1 place-items-center bg-[#0a0d18]"><LoaderCircle className="h-7 w-7 animate-spin text-lime-300" /></main>;
   if (loadError && !data) return <main className="grid flex-1 place-items-center bg-[#0a0d18] px-5"><div className="max-w-md text-center"><MessageSquareQuote className="mx-auto h-9 w-9 text-rose-300" /><h1 className="mt-5 text-3xl font-semibold tracking-[-.05em] text-white">Profile unavailable</h1><p className="mt-3 text-sm leading-6 text-slate-400">{loadError}</p><Link href="/" className="mt-6 inline-flex font-bold text-lime-300">Back to ProofFolio</Link></div></main>;
   if (!data) return null;
+
+  const canEditProfile = currentUser?.profileSlug === data.profile.profileSlug;
 
   return (
     <main className="flex-1 bg-[#0a0d18]">
@@ -55,7 +112,22 @@ export default function PublicProfileView({ slug }: { slug: string }) {
         <div className="relative mx-auto max-w-6xl">
           <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
             <div className="max-w-3xl">
-              <div className="flex items-center gap-3"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-fuchsia-300/15 text-xl font-bold text-fuchsia-200">{data.profile.name.charAt(0).toUpperCase()}</span><span className="inline-flex items-center gap-1.5 rounded-full border border-lime-300/20 bg-lime-300/8 px-3 py-1.5 text-xs font-bold text-lime-200"><BadgeCheck className="h-3.5 w-3.5" /> ProofFolio profile</span></div>
+              <div className="flex items-center gap-3">
+                <div className="group relative h-14 w-14 shrink-0">
+                  <div className="h-14 w-14 overflow-hidden rounded-2xl bg-fuchsia-300/15 text-xl font-bold text-fuchsia-200">
+                    {data.profile.profilePicture ? (
+                      // Cloudinary hosts user-uploaded images, so the native element avoids coupling the UI to one account hostname.
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={data.profile.profilePicture} alt={`${data.profile.name} profile`} className="h-full w-full object-cover" />
+                    ) : <span className="grid h-full w-full place-items-center">{data.profile.name.charAt(0).toUpperCase()}</span>}
+                  </div>
+                  {canEditProfile && <label htmlFor="profile-picture-upload" title="Update profile picture" className={`absolute inset-0 grid place-items-center rounded-2xl bg-[#101424]/75 text-white transition ${uploadingPicture ? "cursor-wait opacity-100" : "cursor-pointer opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}>
+                    {uploadingPicture ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Pencil className="h-5 w-5" />}
+                    <input id="profile-picture-upload" type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={handleProfilePictureChange} disabled={uploadingPicture} />
+                  </label>}
+                </div>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-lime-300/20 bg-lime-300/8 px-3 py-1.5 text-xs font-bold text-lime-200"><BadgeCheck className="h-3.5 w-3.5" /> ProofFolio profile</span>
+              </div>
               <h1 className="mt-7 text-5xl font-semibold tracking-[-.065em] text-white sm:text-7xl">{data.profile.name}</h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-slate-400">{data.profile.bio || "Independent professional sharing real work and verified client experiences."}</p>
             </div>

@@ -5,6 +5,7 @@ export type AuthUser = {
   email: string;
   bio: string;
   profileSlug: string;
+  profilePicture: string;
 };
 
 export type CaseStudy = {
@@ -33,7 +34,7 @@ export type Testimonial = {
 };
 
 export type PublicProfileResponse = {
-  profile: Pick<AuthUser, "name" | "bio" | "profileSlug">;
+  profile: Pick<AuthUser, "name" | "bio" | "profileSlug" | "profilePicture">;
   caseStudies: CaseStudy[];
   testimonials: Testimonial[];
   pagination: { page: number; limit: number; total: number; totalPages: number };

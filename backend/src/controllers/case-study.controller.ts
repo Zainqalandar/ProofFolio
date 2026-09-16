@@ -11,8 +11,9 @@ const uploadedUrls = (files: Express.Multer.File[] | undefined): string[] =>
 
 const createCaseStudy = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { title, description } = (req.body && typeof req.body === "object" ? req.body : {}) as { title?: unknown; description?: unknown };
+    const { title, description } = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
     const screenshots = uploadedUrls(req.files as Express.Multer.File[] | undefined);
+    console.log('screenshots:', screenshots);
     if (!req.user?.id) {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({ message: "Please login first" });
       return;

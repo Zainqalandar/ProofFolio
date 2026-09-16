@@ -10,13 +10,14 @@ const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const getJwtSecret = (): string | undefined =>
   process.env.JWT_SECRET || (process.env.NODE_ENV !== "production" ? "068406" : undefined);
 
-const publicUser = (user: { _id: unknown; name: string; email: string; bio: string; profileSlug: string }) => ({
+const publicUser = (user: { _id: unknown; name: string; email: string; bio: string; profileSlug: string; profilePicture: string }) => ({
   _id: user._id,
   name: user.name,
   username: user.name,
   email: user.email,
   bio: user.bio,
   profileSlug: user.profileSlug,
+  profilePicture: user.profilePicture,
 });
 
 const registerUser = async (req: Request, res: Response): Promise<void> => {
@@ -105,4 +106,26 @@ const getCurrentUser = async (req: AuthenticatedRequest, res: Response): Promise
   }
 };
 
-export { registerUser, loginUser, getCurrentUser };
+const updateProfilePicture = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const profilePicture = req.files?.[0];
+    if (!profilePicture) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: "No profile picture uploaded" });
+      return;
+    }
+    const user = await User.findById(req.user?.id);
+    if (!user) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ message: "User not found" });
+      return;
+    }
+    // Assuming the first file is the profile picture
+    user.profilePicture = profilePicture.path; // Adjust based on how you store the file path
+    await user.save();
+    res.status(HTTP_STATUS.OK).json({ message: "Profile picture updated successfully", user: publicUser(user) });
+  } catch (error) {
+    console.error("Error updating profile picture:", error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ message: "Error updating profile picture" });
+  }
+};
+
+export { registerUser, loginUser, getCurrentUser, updateProfilePicture };

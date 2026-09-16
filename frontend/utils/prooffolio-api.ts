@@ -1,5 +1,5 @@
 import api from "./axiosInstance";
-import type { CaseStudy, PublicProfileResponse, Testimonial } from "@/types/api";
+import type { AuthUser, CaseStudy, PublicProfileResponse, Testimonial } from "@/types/api";
 
 export const getMyCaseStudies = () => api.get<{ caseStudies: CaseStudy[] }>("/case-studies/my");
 
@@ -41,3 +41,9 @@ export const getPublicProfile = (
   slug: string,
   options: { page: number; limit?: number; sort?: "newest" | "oldest"; caseStudy?: string },
 ) => api.get<PublicProfileResponse>(`/public/profile/${slug}`, { params: options });
+
+export const updateProfilePicture = (file: File) => {
+  const payload = new FormData();
+  payload.append("profilePicture", file);
+  return api.put<{ message: string; user: AuthUser }>("/auth/profile-picture", payload);
+};

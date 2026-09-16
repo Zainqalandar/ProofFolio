@@ -26,7 +26,7 @@ const getPublicProfile = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const user = await User.findOne({ profileSlug: slug.toLowerCase() }).select("name bio profileSlug");
+    const user = await User.findOne({ profileSlug: slug.toLowerCase() }).select("name bio profileSlug profilePicture");
     if (!user) {
       res.status(HTTP_STATUS.NOT_FOUND).json({ message: "Profile not found" });
       return;
@@ -44,7 +44,7 @@ const getPublicProfile = async (req: Request, res: Response): Promise<void> => {
       Testimonial.countDocuments(filter),
     ]);
     res.status(HTTP_STATUS.OK).json({
-      profile: { name: user.name, bio: user.bio, profileSlug: user.profileSlug },
+      profile: { name: user.name, bio: user.bio, profileSlug: user.profileSlug, profilePicture: user.profilePicture },
       caseStudies,
       testimonials,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },

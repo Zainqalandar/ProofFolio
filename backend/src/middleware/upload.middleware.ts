@@ -3,10 +3,10 @@ import multer from 'multer';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import cloudinary from '../configs/cloudinary';
 
-const storage = new CloudinaryStorage({
+const createStorage = (folder: string) => new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: 'prooffolio/case-studies', // Folder in Cloudinary where the images will be stored
+    folder,
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
     resource_type: 'image',
   } as any,
@@ -26,7 +26,7 @@ const imageFileFilter = (
 };
 
 const uploadCaseStudyImages = multer({
-  storage,
+  storage: createStorage('prooffolio/case-studies'),
   fileFilter: imageFileFilter,
   limits: {
     files: 5,
@@ -34,4 +34,14 @@ const uploadCaseStudyImages = multer({
   },
 });
 
+const uploadProfilePicture = multer({
+  storage: createStorage('prooffolio/profile-pictures'),
+  fileFilter: imageFileFilter,
+  limits: {
+    files: 1,
+    fileSize: 5 * 1024 * 1024,
+  },
+});
+
+export { uploadProfilePicture };
 export default uploadCaseStudyImages;
