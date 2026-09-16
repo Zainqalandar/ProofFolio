@@ -151,7 +151,13 @@ const updatePublicProfile = async (req: AuthenticatedRequest, res: Response): Pr
       return;
     }
 
-    const user = await User.findOne({ _id: req.user?.id, profileSlug: slug.toLowerCase() });
+    const authenticatedUserId = req.user?.id;
+    if (!authenticatedUserId) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ message: "Authentication is required" });
+      return;
+    }
+
+    const user = await User.findOne({ _id: authenticatedUserId, profileSlug: slug.toLowerCase() });
     if (!user) {
       res.status(HTTP_STATUS.NOT_FOUND).json({ message: "Profile not found or you do not have permission to edit it" });
       return;
