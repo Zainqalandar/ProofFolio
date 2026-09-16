@@ -1,5 +1,6 @@
 const TOKEN_COOKIE = "token";
 const AUTH_CHANGE_EVENT = "prooffolio-auth-change";
+const PROFILE_CHANGE_EVENT = "prooffolio-profile-change";
 
 function notifyAuthChange(): void {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
@@ -29,6 +30,16 @@ export function subscribeToAuthChanges(callback: () => void): () => void {
   if (typeof window === "undefined") return () => undefined;
   window.addEventListener(AUTH_CHANGE_EVENT, callback);
   return () => window.removeEventListener(AUTH_CHANGE_EVENT, callback);
+}
+
+export function notifyProfileChange(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(PROFILE_CHANGE_EVENT));
+}
+
+export function subscribeToProfileChanges(callback: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+  window.addEventListener(PROFILE_CHANGE_EVENT, callback);
+  return () => window.removeEventListener(PROFILE_CHANGE_EVENT, callback);
 }
 
 export function hasAuthToken(): boolean {

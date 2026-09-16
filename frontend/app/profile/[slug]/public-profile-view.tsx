@@ -4,7 +4,7 @@ import Link from "next/link";
 import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarDays, LoaderCircle, MessageSquareQuote, Pencil, Sparkles, X } from "lucide-react";
 import { getCurrentUser } from "@/utils/auth-api";
-import { hasAuthToken } from "@/utils/auth";
+import { hasAuthToken, notifyProfileChange } from "@/utils/auth";
 import { getPublicProfile, updateProfilePicture, updatePublicProfile } from "@/utils/prooffolio-api";
 import { getApiErrorMessage } from "@/utils/api-error";
 import { useNotification } from "@/context/notification-context";
@@ -91,6 +91,7 @@ export default function PublicProfileView({ slug }: { slug: string }) {
         ...previous,
         profile: { ...previous.profile, profilePicture: response.data.user.profilePicture },
       } : previous);
+      notifyProfileChange();
       success("Profile picture updated.");
     } catch (requestError) {
       error(getApiErrorMessage(requestError, "The profile picture could not be updated."));
@@ -120,6 +121,7 @@ export default function PublicProfileView({ slug }: { slug: string }) {
         ...previous,
         profile: { ...previous.profile, ...response.data.profile },
       } : previous);
+      notifyProfileChange();
       setIsProfileEditorOpen(false);
       success("Profile updated.");
     } catch (requestError) {
